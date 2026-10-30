@@ -24,18 +24,17 @@ const styleMatch = html.match(styleRe);
 if (!styleMatch) throw new Error('未找到 <style> 块');
 const css = styleMatch[1];
 
-// 2) script：按长度区分引擎与 App
+// 2) script：按注入顺序拆 —— 引擎 / 白话解读 / 应用
 const scriptRe = /<script>([\s\S]*?)<\/script>/g;
 const scripts = [...html.matchAll(scriptRe)].map(m => m[1]);
-if (scripts.length !== 2) throw new Error(`预期 2 个 <script>，实际 ${scripts.length}`);
-const [a, b] = scripts;
-const engine = a.length > b.length ? a : b;
-const app = a.length > b.length ? b : a;
+if (scripts.length !== 3) throw new Error(`预期 3 个 <script>（引擎 / 白话解读 / 应用），实际 ${scripts.length}`);
+const [engine, plain, app] = scripts;
 
-// 3) 骨架：把三块按原位置替换为注入标记
-let shell = html
+// 3) 骨架：三个 script 块按序换成注入标记，保留原有换行
+let seq = 0;
+const shell = html
   .replace(styleRe, '<!--INJECT:STYLE-->')
-  .replace(/<script>[\s\S]*?<\/script>(\r?\n)<script>[\s\S]*?<\/script>/, (m, nl) => '<!--INJECT:ENGINE-->' + nl + '<!--INJECT:APP-->');
+  .replace(scriptRe, () => ['<!--INJECT:ENGINE-->', '<!--INJECT:PLAIN-->', '<!--INJECT:APP-->'][seq++]);
 
 if (!shell.includes('<!--INJECT:STYLE-->')) throw new Error('骨架缺少 STYLE 注入点');
 if (!shell.includes('<!--INJECT:ENGINE-->')) throw new Error('骨架缺少 ENGINE 注入点');
@@ -46,6 +45,7 @@ fs.mkdirSync(path.join(SRC, 'engine'), { recursive: true });
 fs.writeFileSync(path.join(SRC, 'index.html'), shell, 'utf8');
 fs.writeFileSync(path.join(SRC, 'styles.css'), css, 'utf8');
 fs.writeFileSync(path.join(SRC, 'app.js'), app, 'utf8');
+fs.writeFileSync(path.join(SRC, 'plain-reading.js'), plain, 'utf8');
 // 引擎产物原样留在 src/engine.js，带独立版本记录
 fs.writeFileSync(path.join(SRC, 'engine.js'), engine, 'utf8');
 
@@ -63,6 +63,7 @@ fs.writeFileSync(path.join(SRC, 'engine', 'VERSION.json'), JSON.stringify(meta, 
 console.log('抽出完成：');
 console.log('  骨架   ', shell.length, '字节');
 console.log('  样式   ', css.length, '字节');
+console.log('  白话解读', plain.length, '字节（可读）');
 console.log('  App    ', app.length, '字节（可读）');
 console.log('  引擎   ', engine.length, '字节（压缩）');
 console.log('  引擎版本', meta.version, '/', meta.engine);

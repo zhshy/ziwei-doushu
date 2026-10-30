@@ -17,6 +17,7 @@ const state = {
   chart:null, view:'mingpan', dxIndex:0, lnYear:new Date().getFullYear(),
   selBranch:null, brightnessSchool:'default', cmpOpen:false,
   ai:{ status:'idle', map:{}, err:'', flagged:0, sig:'' }, aiCfgOpen:false, readMode:'mingpan',
+  readStyle:'plain',
 };
 
 const $ = s => document.querySelector(s);
@@ -1118,6 +1119,59 @@ function renderReading(){
   }
 }
 
+/* ───────── 白话版解读 ───────── */
+function styleSwitchHtml(){
+  const cur = state.readStyle || 'plain';
+  return `<div class="rd-switch">
+    <button data-rdstyle="plain" class="${cur==='plain'?'on':''}">白话版</button>
+    <button data-rdstyle="pro" class="${cur==='pro'?'on':''}">专业版</button>
+  </div>`;
+}
+function bindStyleSwitch(box){
+  box.querySelectorAll('[data-rdstyle]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const v = b.dataset.rdstyle;
+      if((state.readStyle||'plain') === v) return;
+      state.readStyle = v;
+      renderReading();
+    });
+  });
+}
+function renderPlainReading(box, c){
+  const rd = window.PLAIN_READING(ZW, c);
+  let html = styleSwitchHtml();
+  html += `<div class="rd-plain-intro">按性格、事业、财运、婚姻、健康、六亲、大限七块来讲，尽量不用术语。</div>`;
+
+  for(const sec of rd.sections){
+    if(sec.rows){
+      html += `<section class="rd-sec">
+        <div class="rd-h">${esc(sec.title)}<small>每十年一段，看重心往哪走</small></div>
+        <div class="dx-table">${sec.rows.map(r=>`
+          <div class="dx-row${r.current?' now':''}">
+            <span class="dx-age">${esc(r.age)}</span>
+            <span class="dx-pal">${esc(r.palace)}</span>
+            <span class="dx-txt">${esc(r.text)}${r.current?'<b class="dx-now">← 你现在在这段</b>':''}</span>
+          </div>`).join('')}</div>
+      </section>`;
+    } else if(sec.items){
+      html += `<section class="rd-sec">
+        <div class="rd-h">${esc(sec.title)}</div>
+        <div class="kin-list">${sec.items.map(it=>`
+          <div class="kin-row"><span class="kin-l">${esc(it.label)}</span><span class="kin-t">${esc(it.text)}</span></div>`).join('')}</div>
+      </section>`;
+    } else {
+      html += `<section class="rd-sec">
+        <div class="rd-h">${esc(sec.title)}</div>
+        <div class="plain-body">${(sec.paras||[]).filter(Boolean).map(t=>`<p>${esc(t)}</p>`).join('')}</div>
+      </section>`;
+    }
+  }
+
+  html += `<div class="rd-foot-note">白话版只是把术语换成日常话，判断依据与专业版完全一致。想逐宫细看或看 AI 评语，切到专业版。</div>`;
+  box.innerHTML = html;
+  bindStyleSwitch(box);
+}
+
 function renderReadingInner(){
   const box = $('#reading-body');
   const c = state.chart;
@@ -1141,6 +1195,12 @@ function renderReadingInner(){
     }
   }
 
+  // 白话版：不走引擎的 buildReading，改用 PLAIN_READING 在展示层重新组织
+  if((state.readStyle || 'plain') === 'plain'){
+    renderPlainReading(box, c);
+    return;
+  }
+
   let pats = [];
   try{ pats = ZW.detectPatterns(c) || []; }catch(e){ /* 格局失败不影响其余解读 */ }
 
@@ -1157,7 +1217,8 @@ function renderReadingInner(){
     ['rd-base','命局基础'], ['rd-pattern','格局'], ['rd-limit','运限'],
   ];
 
-  let html = `<div class="rd-nav">${nav.map(([id,label])=>`<button data-rd="${id}">${label}</button>`).join('')}</div>`;
+  let html = styleSwitchHtml();
+  html += `<div class="rd-nav">${nav.map(([id,label])=>`<button data-rd="${id}">${label}</button>`).join('')}</div>`;
 
   html += viewBarHtml(mode, c);
 
@@ -1253,6 +1314,8 @@ function renderReadingInner(){
   }
 
   box.innerHTML = html;
+
+  bindStyleSwitch(box);
 
   box.querySelectorAll('.rd-nav button').forEach(b=>{
     b.addEventListener('click', ()=>{

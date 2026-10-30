@@ -18,12 +18,14 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const shell = read('src/index.html');
 const css = read('src/styles.css');
 const engine = read('src/engine.js');
+const plain = read('src/plain-reading.js');
 const app = read('src/app.js');
 
 // 用函数式替换，避免 $& / $1 在内容里被当成分组引用（引擎代码含 $）
 let out = shell
   .replace('<!--INJECT:STYLE-->', () => '<style>' + css + '</style>')
   .replace('<!--INJECT:ENGINE-->', () => '<script>' + engine + '</script>')
+  .replace('<!--INJECT:PLAIN-->', () => '<script>' + plain + '</script>')
   .replace('<!--INJECT:APP-->', () => '<script>' + app + '</script>');
 
 const leftover = out.match(/<!--INJECT:[A-Z]+-->/);
