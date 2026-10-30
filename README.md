@@ -46,19 +46,38 @@
 若要从源码重新构建：
 
 ```bash
-cd ziwei-app
-npm install
-npm run build     # 产出 紫微斗数.html
+npm run build     # 由 src/ 拼出 index.html
+npm run check     # 只比对不写盘，确认没有意外漂移
+npm test          # 亮度口径回归测试（约 15 秒）
 ```
 
-构建脚本会用 esbuild 把 TypeScript 排盘引擎打包成内联脚本，最终输出单个 HTML 文件。
+构建无需 `npm install`：脚本只用 Node 内置模块。
+
+### 源码结构
+
+```
+index.html            发布产物（由 src/ 构建，勿直接改）
+src/
+  index.html          页面骨架，含三处注入点
+  styles.css          全部样式
+  app.js              UI 层：表单、盘面渲染、六分区解读（未压缩，可读）
+  engine.js           引擎层产物：iztro + lunar + 本地解读库（压缩，见下）
+  engine/VERSION.json 引擎版本
+  engine/PATCHES.md   引擎改动规则与记录
+scripts/
+  build.mjs           构建
+  extract.mjs         一次性抽取（留作审计，可重跑校验同源）
+  test-brightness.mjs 亮度口径回归
+```
+
+引擎层是压缩产物，不参与常规编辑；改引擎的流程与已知陷阱见 [`src/engine/PATCHES.md`](./src/engine/PATCHES.md)。
 
 ---
 
 ## 技术
 
-- 排盘内核：[iztro](https://github.com/SylarLong/iztro) + lunar-javascript
-- 构建：esbuild（IIFE 内联）
+- 排盘内核：[iztro](https://github.com/SylarLong/iztro) + lunar-javascript，上游排盘层：[Renhuai123/ziwei-doushu](https://github.com/Renhuai123/ziwei-doushu)
+- 构建：Node 脚本按注入点拼装，产出单个 HTML 文件
 - 纯前端，无框架依赖，无构建产物外的运行时依赖
 - 数据不上传，AI 评语除外（点击生成时会把命盘信息发送到第三方接口，不含姓名）
 

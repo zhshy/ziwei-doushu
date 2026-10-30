@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>紫微斗数 · 排盘</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='11' fill='%23a93126'/%3E%3Ctext x='32' y='46' font-size='40' font-family='serif' fill='%23fff' text-anchor='middle'%3E%E7%B4%AB%3C/text%3E%3C/svg%3E">
+<!--INJECT:STYLE-->
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="seal"><span>紫微</span><span>斗数</span></div>
+      <div>
+        <h1>紫微斗数 · 排盘</h1>
+        <div class="sub">输入阳历生辰，即时起盘 · 本命 / 大限 / 流年 · 逐宫详解</div>
+      </div>
+    </div>
+    <div class="credit">
+      排盘引擎：<a href="https://github.com/Renhuai123/ziwei-doushu" target="_blank" rel="noopener">Renhuai123/ziwei-doushu</a>（MIT）<br>
+      解读为本地知识库组合生成，非上游商业断语库
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="chart">排盘</button>
+    <button class="tab" data-tab="reading">详细解读</button>
+  </div>
+
+  <!-- ══════════ 排盘 ══════════ -->
+  <section id="view-chart">
+
+    <div id="form-panel">
+      <div class="formcard">
+        <h2>出生信息</h2>
+        <p class="hint">请填写<strong>阳历（公历）</strong>生日。若不知确切钟点，可先按时辰估算 —— 时辰不同，整盘皆变。</p>
+
+        <div class="row">
+          <label>阳历生日</label>
+          <div class="date3">
+            <label class="d3"><input type="number" id="f-y" min="1900" max="2030" inputmode="numeric" placeholder="1990"><span>年</span></label>
+            <label class="d3"><input type="number" id="f-m" min="1" max="12" inputmode="numeric" placeholder="1"><span>月</span></label>
+            <label class="d3"><input type="number" id="f-d" min="1" max="31" inputmode="numeric" placeholder="1"><span>日</span></label>
+          </div>
+        </div>
+        <div class="row">
+          <label>出生时刻</label>
+          <input type="time" id="f-time" value="12:00" step="60">
+        </div>
+        <div class="row">
+          <label>性别</label>
+          <div class="seg" id="f-gender">
+            <button class="on" data-g="male">男</button>
+            <button data-g="female">女</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>出生地</label>
+          <div class="two">
+            <select id="f-prov"><option value="">不校正（直接用钟表时间）</option></select>
+            <select id="f-city" disabled><option value="">（先选省份）</option></select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="f-go">起 盘</button>
+          <button class="btn btn-ghost" id="f-demo">填入示例</button>
+        </div>
+        <div class="err" id="f-err"></div>
+        <p class="note">
+          时辰对照：子 23–1 · 丑 1–3 · 寅 3–5 · 卯 5–7 · 辰 7–9 · 巳 9–11 · 午 11–13 · 未 13–15 · 申 15–17 · 酉 17–19 · 戌 19–21 · 亥 21–23。
+          23:00–23:59 出生按次日排盘（晚子时换日）。选择出生地后按当地经度做真太阳时校正，1986–1991 年出生会提示夏令时。
+        </p>
+      </div>
+    </div>
+
+    <div id="chart-panel" hidden>
+      <div class="toolbar">
+        <div class="seg" id="view-seg">
+          <button class="on" data-v="mingpan">本命</button>
+          <button data-v="daxian">大限</button>
+          <button data-v="liunian">流年</button>
+        </div>
+        <div class="cfg" id="cfg-daxian" hidden>
+          <button class="mini" id="dx-prev">‹</button>
+          <span id="dx-label" class="pill"></span>
+          <button class="mini" id="dx-next">›</button>
+        </div>
+        <div class="cfg" id="cfg-liunian" hidden>
+          <span>流年</span>
+          <select id="ln-year"></select>
+          <span id="ln-label" class="pill"></span>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-copy-chart">复制星盘</button>
+        <button class="btn btn-ghost btn-sm" id="btn-cmp">对照相邻时辰</button>
+        <button class="btn btn-ghost" id="btn-restart">重新起盘</button>
+      </div>
+
+      <div class="notes" id="notes" hidden></div>
+
+      <div class="cmp" id="cmp" hidden></div>
+
+      <div class="chart-layout">
+        <div class="boardwrap">
+          <div class="swipe-hint">← 左右滑动查看完整命盘 →</div>
+          <div class="board" id="board"></div>
+        </div>
+        <aside>
+          <div class="card" id="detail-card"></div>
+          <div class="card" id="pattern-card"></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 详细解读 ══════════ -->
+  <section id="view-reading" hidden>
+    <div id="reading-body"></div>
+  </section>
+
+  <div class="sheet" id="copy-sheet" hidden>
+    <div class="sheet-box">
+      <div class="sheet-h">
+        <span>星盘文字</span>
+        <button class="cmp-x" id="copy-close" title="关闭">✕</button>
+      </div>
+      <p class="sheet-tip">整段复制后，可直接粘贴给其他 AI 解盘。文字按宫序排列，含四化、大限与解盘要求。</p>
+      <textarea id="copy-area" readonly spellcheck="false"></textarea>
+      <div class="sheet-foot">
+        <span id="copy-msg"></span>
+        <button class="btn btn-primary btn-sm" id="copy-do">复制全部</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div>
+      排盘引擎来自开源项目 <a href="https://github.com/Renhuai123/ziwei-doushu" target="_blank" rel="noopener">Renhuai123/ziwei-doushu</a>
+      （代码 MIT）。解读文字由本页内置的星性 / 宫职知识库按命盘确定性生成，同一命盘恒得同一结果。<br>
+      「倪师《天纪》」板块依据 <a href="https://github.com/Renhuai123/nihai-tianji-corpus" target="_blank" rel="noopener">nihai-tianji-corpus</a> 归纳转述（该语料 CC BY-NC-SA，仅限非商业研习，非原话转录）。<br>
+      单文件离线工具，数据不上传、不联网（AI 评语除外）。
+    </div>
+    <div style="text-align:right">
+      命理内容仅供传统文化研习参考，不作决策依据。
+    </div>
+  </footer>
+</div>
+
+<!--INJECT:ENGINE-->
+<!--INJECT:APP-->
+</body>
+</html>

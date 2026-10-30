@@ -1,0 +1,16 @@
+{
+  "name": "ziwei-doushu",
+  "version": "1.1.0",
+  "private": true,
+  "description": "紫微斗数排盘与解读 · 单文件离线版",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "test": "node scripts/test-brightness.mjs",
+    "extract": "node scripts/extract.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
