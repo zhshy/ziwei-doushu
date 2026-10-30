@@ -279,6 +279,27 @@ aside{display:flex;flex-direction:column;gap:14px}
 .shc .bd{font-size:12.5px;line-height:1.9;color:var(--ink2)}
 .shc .bd b{color:var(--ink);font-weight:600}
 
+/* ─── 星盘文字弹层 ─── */
+.sheet{position:fixed;inset:0;z-index:80;background:rgba(43,38,32,.42);backdrop-filter:blur(2px);
+  display:flex;align-items:center;justify-content:center;padding:24px}
+.sheet-box{background:var(--card);border:1px solid var(--line);border-radius:16px;width:min(760px,100%);
+  max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(60,45,25,.28);padding:20px 22px 18px}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sheet-h span{font-family:var(--serif);font-size:16px;letter-spacing:2px;font-weight:600}
+.sheet-tip{font-size:12px;color:var(--ink3);line-height:1.7;margin-bottom:12px}
+#copy-area{flex:1;min-height:320px;resize:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;line-height:1.75;color:#3a342c;background:#fbf8f1;border:1px solid var(--line2);
+  border-radius:10px;padding:12px 14px;white-space:pre;overflow:auto}
+.sheet-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px}
+#copy-msg{font-size:12px;color:var(--ink2)}
+#copy-msg.ok{color:#2f6b36}
+#copy-msg.bad{color:var(--red)}
+@media (max-width:760px){
+  .sheet{padding:10px}
+  .sheet-box{padding:16px 14px 14px;max-height:92vh}
+  #copy-area{font-size:11px;min-height:260px}
+}
+
 .rd-empty{background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:56px 24px;text-align:center}
 .rd-empty p{font-size:13px;color:var(--ink3);margin-bottom:18px}
 
@@ -462,6 +483,7 @@ footer a{color:var(--ink2);text-decoration:none;border-bottom:1px dotted var(--i
           <span id="ln-label" class="pill"></span>
         </div>
         <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" id="btn-copy-chart">复制星盘</button>
         <button class="btn btn-ghost btn-sm" id="btn-cmp">对照相邻时辰</button>
         <button class="btn btn-ghost" id="btn-restart">重新起盘</button>
       </div>
@@ -487,6 +509,21 @@ footer a{color:var(--ink2);text-decoration:none;border-bottom:1px dotted var(--i
   <section id="view-reading" hidden>
     <div id="reading-body"></div>
   </section>
+
+  <div class="sheet" id="copy-sheet" hidden>
+    <div class="sheet-box">
+      <div class="sheet-h">
+        <span>星盘文字</span>
+        <button class="cmp-x" id="copy-close" title="关闭">✕</button>
+      </div>
+      <p class="sheet-tip">整段复制后，可直接粘贴给其他 AI 解盘。文字按宫序排列，含四化、大限与解盘要求。</p>
+      <textarea id="copy-area" readonly spellcheck="false"></textarea>
+      <div class="sheet-foot">
+        <span id="copy-msg"></span>
+        <button class="btn btn-primary btn-sm" id="copy-do">复制全部</button>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <div>
@@ -1127,6 +1164,14 @@ function initForm(){
     buildChart();
   });
 
+  $('#btn-copy-chart').addEventListener('click', openCopySheet);
+  $('#copy-close').addEventListener('click', closeCopySheet);
+  $('#copy-do').addEventListener('click', doCopy);
+  $('#copy-sheet').addEventListener('click', e => { if(e.target.id === 'copy-sheet') closeCopySheet(); });
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && !$('#copy-sheet').hidden) closeCopySheet();
+  });
+
   $('#btn-restart').addEventListener('click', ()=>{
     $('#form-panel').hidden = false;
     $('#chart-panel').hidden = true;
@@ -1189,6 +1234,134 @@ function initForm(){
     state.selBranch = ZW.getYearBranchIndex(state.lnYear);
     render();
   });
+}
+
+/* ───────── 星盘文字导出 ───────── */
+function chartToText(){
+  const c = state.chart;
+  if(!c) return '';
+  const bi = c.birthInfo, li = c.lunarInfo || {}, orig = c.__origDate || {};
+  const p2 = n => String(n).padStart(2, '0');
+  const L = [];
+
+  const solar = `${orig.y || bi.year}-${p2(orig.m || bi.month)}-${p2(orig.d || bi.day)}`
+    + ` ${p2(orig.ch ?? 0)}:${p2(orig.cm ?? 0)}`;
+  const lunar = li.lunarYear
+    ? `${li.lunarYear} 年${li.isLeapMonth ? '闰' : ''}${Math.abs(li.lunarMonth)} 月 ${li.lunarDay} 日`
+    : '—';
+  const shenP = c.palaces.find(x => x.branch === c.shenGongBranch);
+  const corrected = (c.__notes || []).some(n => n.indexOf('真太阳时') >= 0);
+
+  L.push('紫微斗数星盘');
+  L.push('（排盘口径：主流《全书》派，农历年换年；'
+    + (corrected ? '已按出生地做真太阳时校正' : '未做真太阳时校正') + '）');
+  L.push('');
+  L.push('【基本资料】');
+  L.push(`性别：${bi.gender === 'male' ? '男' : '女'}　阴阳：${c.yinYangGender || '—'}`);
+  L.push(`阳历：${solar}（${BR[c.__hourBranch]}时）`);
+  L.push(`农历：${lunar}`);
+  if (li.fourPillars) L.push(`四柱：${li.fourPillars.join(' ')}`);
+  L.push(`五行局：${c.wuxingJuName || '—'}　命主：${c.mingZhu || '—'}　身主：${c.shenZhu || '—'}`);
+  L.push(`命宫：${BR[c.mingGongBranch]}宫　身宫：${BR[c.shenGongBranch]}宫`
+    + (shenP ? `（本命${shenP.name}宫）` : ''));
+  L.push('');
+
+  L.push('【十二宫】按宫序排列；括号内为地支、宫干与该宫所辖大限岁数；星曜后小括号为亮度，方括号为生年四化');
+  const ORDER_NAMES = ['命宫','兄弟','夫妻','子女','财帛','疾厄','迁移','仆役','官禄','田宅','福德','父母'];
+  for (const nm of ORDER_NAMES) {
+    const p = c.palaces.find(x => x.name === nm);
+    if (!p) continue;
+    const stars = p.stars.map(x => {
+      let t = x.name;
+      if (x.brightnessRaw) t += `(${x.brightnessRaw})`;
+      if (x.siHua) t += `[${x.siHua}]`;
+      return t;
+    }).join(' ');
+    const head = `${nm}（${BR[p.branch]}·${ST[p.stem]}干`
+      + (p.daXianAge ? `｜${p.daXianAge[0]}-${p.daXianAge[1]}岁` : '') + '）';
+    let body = stars || '无主星';
+    if (p.isEmpty && p.borrowedStars && p.borrowedStars.length) {
+      body += `　空宫，借对宫${p.borrowedFromName || ''}：${p.borrowedStars.join('、')}`;
+    }
+    L.push(`${head}：${body}`);
+  }
+  L.push('');
+
+  L.push('【生年四化】');
+  for (const h of ['禄','权','科','忌']) {
+    let done = false;
+    for (const p of c.palaces) {
+      const x = p.stars.find(y => y.siHua === h);
+      if (x) { L.push(`化${h}：${x.name} → ${p.name}宫`); done = true; break; }
+    }
+    if (!done) L.push(`化${h}：—`);
+  }
+  L.push('');
+
+  L.push('【大限】');
+  c.daXians.forEach((dx, i) => {
+    const sy = ZW.getDaXianStartYear(c, i);
+    L.push(`第 ${i + 1} 限　${dx.startAge}–${dx.endAge} 岁`
+      + (sy ? `（${sy}–${sy + dx.endAge - dx.startAge}）` : '')
+      + `：${dx.palaceName === '命宫' ? '命宫' : dx.palaceName + '宫'}（${BR[dx.palaceBranch]}）`);
+  });
+  L.push('');
+
+  let pats = [];
+  try { pats = ZW.detectPatterns(c) || []; } catch (e) { /* 格局失败不影响导出 */ }
+  if (pats.length) {
+    L.push('【格局】');
+    L.push(pats.slice(0, 8).map(x => x.name).join('、'));
+    L.push('');
+  }
+
+  L.push('【解盘要求】');
+  L.push('1. 请按紫微斗数主流体系解读：先看生年四化落宫与命宫三方四正（财帛、官禄、迁移），再逐宫展开。');
+  L.push('2. 每宫要说明星曜组合在现实中呈现什么倾向，不要只堆术语。');
+  L.push('3. 区分本命、大限、流年三个层次，不要混为一谈。');
+  L.push('4. 不下吉凶定论，不写医疗、投资、婚配等具体建议。');
+  return L.join('\n');
+}
+
+function openCopySheet(){
+  if(!state.chart) return;
+  const ta = $('#copy-area');
+  ta.value = chartToText();
+  $('#copy-msg').textContent = '';
+  $('#copy-msg').className = '';
+  $('#copy-sheet').hidden = false;
+  ta.scrollTop = 0;
+  ta.focus();
+}
+
+function closeCopySheet(){
+  $('#copy-sheet').hidden = true;
+}
+
+/** file:// 下 navigator.clipboard 不可用，回退到 execCommand */
+async function doCopy(){
+  const ta = $('#copy-area');
+  const msg = $('#copy-msg');
+  const text = ta.value;
+  let ok = false;
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }
+  }catch(e){ ok = false; }
+  if(!ok){
+    try{
+      ta.removeAttribute('readonly');
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      ok = document.execCommand('copy');
+    }catch(e){ ok = false; }
+    ta.setAttribute('readonly', 'readonly');
+  }
+  msg.textContent = ok ? '已复制到剪贴板' : '浏览器拦住了自动复制，请手动全选（⌘A）后复制';
+  msg.className = ok ? 'ok' : 'bad';
 }
 
 /* ───────── 详细解读 ───────── */
