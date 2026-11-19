@@ -1,9 +1,11 @@
 /**
  * 一次性抽取脚本：把发布态单文件 index.html 拆成可维护源码。
  *
- * 拆出四块：
+ * 拆出五块：
  *   src/index.html  — 骨架（style / script 位置留注入标记）
  *   src/styles.css  — 全部样式
+ *   src/interpret.js — 四化层次与宫干飞化（白话版、专业版共用）
+ *   src/plain-reading.js — 白话版解读
  *   src/app.js      — UI 层（作者自写，未压缩，可读）
  *   src/engine.js   — 引擎层产物（iztro + lunar + 本地解读库，已压缩为单行，原样保留）
  *
@@ -24,17 +26,17 @@ const styleMatch = html.match(styleRe);
 if (!styleMatch) throw new Error('未找到 <style> 块');
 const css = styleMatch[1];
 
-// 2) script：按注入顺序拆 —— 引擎 / 白话解读 / 应用
+// 2) script：按注入顺序拆 —— 引擎 / 四化层次 / 白话解读 / 应用
 const scriptRe = /<script>([\s\S]*?)<\/script>/g;
 const scripts = [...html.matchAll(scriptRe)].map(m => m[1]);
-if (scripts.length !== 3) throw new Error(`预期 3 个 <script>（引擎 / 白话解读 / 应用），实际 ${scripts.length}`);
-const [engine, plain, app] = scripts;
+if (scripts.length !== 4) throw new Error(`预期 4 个 <script>（引擎 / 四化层次 / 白话解读 / 应用），实际 ${scripts.length}`);
+const [engine, interpret, plain, app] = scripts;
 
-// 3) 骨架：三个 script 块按序换成注入标记，保留原有换行
+// 3) 骨架：四个 script 块按序换成注入标记，保留原有换行
 let seq = 0;
 const shell = html
   .replace(styleRe, '<!--INJECT:STYLE-->')
-  .replace(scriptRe, () => ['<!--INJECT:ENGINE-->', '<!--INJECT:PLAIN-->', '<!--INJECT:APP-->'][seq++]);
+  .replace(scriptRe, () => ['<!--INJECT:ENGINE-->', '<!--INJECT:READ-->', '<!--INJECT:PLAIN-->', '<!--INJECT:APP-->'][seq++]);
 
 if (!shell.includes('<!--INJECT:STYLE-->')) throw new Error('骨架缺少 STYLE 注入点');
 if (!shell.includes('<!--INJECT:ENGINE-->')) throw new Error('骨架缺少 ENGINE 注入点');
@@ -45,6 +47,7 @@ fs.mkdirSync(path.join(SRC, 'engine'), { recursive: true });
 fs.writeFileSync(path.join(SRC, 'index.html'), shell, 'utf8');
 fs.writeFileSync(path.join(SRC, 'styles.css'), css, 'utf8');
 fs.writeFileSync(path.join(SRC, 'app.js'), app, 'utf8');
+fs.writeFileSync(path.join(SRC, 'interpret.js'), interpret, 'utf8');
 fs.writeFileSync(path.join(SRC, 'plain-reading.js'), plain, 'utf8');
 // 引擎产物原样留在 src/engine.js，带独立版本记录
 fs.writeFileSync(path.join(SRC, 'engine.js'), engine, 'utf8');
@@ -63,6 +66,7 @@ fs.writeFileSync(path.join(SRC, 'engine', 'VERSION.json'), JSON.stringify(meta, 
 console.log('抽出完成：');
 console.log('  骨架   ', shell.length, '字节');
 console.log('  样式   ', css.length, '字节');
+console.log('  四化层次', interpret.length, '字节（可读）');
 console.log('  白话解读', plain.length, '字节（可读）');
 console.log('  App    ', app.length, '字节（可读）');
 console.log('  引擎   ', engine.length, '字节（压缩）');

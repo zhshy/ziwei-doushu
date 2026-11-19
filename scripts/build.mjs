@@ -18,6 +18,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const shell = read('src/index.html');
 const css = read('src/styles.css');
 const engine = read('src/engine.js');
+const interpret = read('src/interpret.js');
 const plain = read('src/plain-reading.js');
 const app = read('src/app.js');
 
@@ -25,6 +26,7 @@ const app = read('src/app.js');
 let out = shell
   .replace('<!--INJECT:STYLE-->', () => '<style>' + css + '</style>')
   .replace('<!--INJECT:ENGINE-->', () => '<script>' + engine + '</script>')
+  .replace('<!--INJECT:READ-->', () => '<script>' + interpret + '</script>')
   .replace('<!--INJECT:PLAIN-->', () => '<script>' + plain + '</script>')
   .replace('<!--INJECT:APP-->', () => '<script>' + app + '</script>');
 

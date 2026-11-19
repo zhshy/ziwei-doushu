@@ -372,12 +372,13 @@ function renderPatterns(c){
   let pats = [];
   try{ pats = ZW.detectPatterns(c) || []; }catch(e){ pats = []; }
 
-  if(!pats.length){ card.innerHTML = `<h3>格局 <small>未识别到成格</small></h3><p class="empty">此盘未见规则库内成形的经典格局</p>`; return; }
+  if(!pats.length){ card.innerHTML = `<h3>格局 <small>总结标签</small></h3><p class="empty">此盘未见规则库内成形的经典格局。格局名不能反过来改星。</p>`; return; }
 
   const order = { excellent:0, good:1, neutral:2, caution:3 };
   pats.sort((a,b)=>(order[a.level]??9)-(order[b.level]??9));
 
-  card.innerHTML = `<h3>格局 <small>命中 ${pats.length} 项</small></h3>
+  card.innerHTML = `<h3>格局 <small>总结标签 · ${pats.length} 项</small></h3>
+    <p class="empty">先看星和四化。名字对不上结构，就只算接近。</p>
     ${pats.slice(0,12).map(pt=>`
       <div class="pat ${pt.level}">
         <span class="nm">${esc(pt.name)}</span>
@@ -769,16 +770,19 @@ function chartToText(){
   let pats = [];
   try { pats = ZW.detectPatterns(c) || []; } catch (e) { /* 格局失败不影响导出 */ }
   if (pats.length) {
-    L.push('【格局】');
+    L.push('【格局】以下名称只供总结，须与上面的星曜核对；对不上就不要当成结论。');
     L.push(pats.slice(0, 8).map(x => x.name).join('、'));
     L.push('');
   }
 
   L.push('【解盘要求】');
-  L.push('1. 请按紫微斗数主流体系解读：先看生年四化落宫与命宫三方四正（财帛、官禄、迁移），再逐宫展开。');
-  L.push('2. 每宫要说明星曜组合在现实中呈现什么倾向，不要只堆术语。');
-  L.push('3. 区分本命、大限、流年三个层次，不要混为一谈。');
-  L.push('4. 不下吉凶定论，不写医疗、投资、婚配等具体建议。');
+  L.push('1. 以本次盘面为准，不要改星、补星。先声明排盘口径，再下判断。');
+  L.push('2. 顺序：命宫与身宫 → 命宫三方四正（财帛、官禄、迁移）→ 主星亮度与辅煞 → 四化 → 重点宫 → 最后才提格局名。');
+  L.push('3. 四化分三层：生年、大限、流年。先本命，再大限，再流年，不要混在一段里。');
+  L.push('4. 大限或流年与生年叠在同一颗星、同一宫时，点明双禄、双忌、禄忌交战、忌处逢禄。宫干飞化只讲自化、飞忌，以及核心宫之间的飞禄；禄忌落在对宫时写明对冲。');
+  L.push('5. 格局只做总结。结构对不上就说接近或不成立，并写破格原因。');
+  L.push('6. 术语第一次出现用一句白话解释。凶象写成课题、代价和可以调整的地方，不说注定。');
+  L.push('7. 不谈寿夭。健康、法律、财务只作结构提醒，不替代现实中的专业意见。');
   return L.join('\n');
 }
 
@@ -1110,6 +1114,33 @@ function viewBarHtml(mode, c){
   </div>`;
 }
 
+function layerSectionHtml(c){
+  if(!window.ZW_READ) return '';
+  let a;
+  try{
+    a = window.ZW_READ.analyze(ZW, c, { daxianIndex: state.dxIndex, liunianYear: state.lnYear });
+  }catch(e){ return ''; }
+  const blocks = (a.blocks || []).filter(b => b.text);
+  if(!blocks.length && !(a.ji && a.ji.pro)) return '';
+  let body = `<p>四化分三层。生年是先天课题，大限是这十年的主题，流年是今年的触发。先本命，再大限，再流年，不要混在一段里下结论。</p>`;
+  blocks.forEach(b=>{
+    body += `<p><b>${esc(b.label)}${b.note ? ' · ' + esc(b.note) : ''}。</b> ${esc(b.text)}</p>`;
+  });
+  (a.overlays || []).forEach(x=>{ if(x.pro) body += `<p><b>${esc(x.title)}。</b> ${esc(x.pro)}</p>`; });
+  if(a.ji && a.ji.pro) body += `<p>${esc(a.ji.pro)}</p>`;
+  (a.focus || []).forEach(x=>{ if(x.pro) body += `<p>${esc(x.pro)}</p>`; });
+  (a.axes || []).forEach(x=>{ if(x.pro) body += `<p>${esc(x.pro)}</p>`; });
+  const fly = (a.flying || []).map(x=>x.pro).filter(Boolean);
+  if(fly.length){
+    body += `<p><b>宫干飞化。</b> 只列自化、飞忌，以及命宫、官禄、财帛、夫妻、迁移、福德之间的飞禄。</p>`;
+    fly.forEach(t=>{ body += `<p>${esc(t)}</p>`; });
+  }
+  return `<section class="rd-sec" id="rd-layers">
+    <div class="rd-h">四化层次<small>先本命，再大限，再流年</small></div>
+    <div class="lead">${body}</div>
+  </section>`;
+}
+
 function renderReading(){
   try{ renderReadingInner(); }
   catch(e){
@@ -1140,7 +1171,7 @@ function bindStyleSwitch(box){
 function renderPlainReading(box, c){
   const rd = window.PLAIN_READING(ZW, c);
   let html = styleSwitchHtml();
-  html += `<div class="rd-plain-intro">按性格、事业、财运、婚姻、健康、六亲、大限七块来讲，尽量不用术语。</div>`;
+  html += `<div class="rd-plain-intro">按性格、事业、财运、婚姻、出门、心态、健康、六亲来讲。四化分成先天、这十年、今年三层，格局名放在最后，只当结构的外号。</div>`;
 
   for(const sec of rd.sections){
     if(sec.rows){
@@ -1167,7 +1198,7 @@ function renderPlainReading(box, c){
     }
   }
 
-  html += `<div class="rd-foot-note">白话版只是把术语换成日常话，判断依据与专业版完全一致。想逐宫细看或看 AI 评语，切到专业版。</div>`;
+  html += `<div class="rd-foot-note">白话版和专业版用的是同一张盘。术语第一次出现会换成日常话。健康、钱和关系上的决定以现实为准，这里不判断寿数。想逐宫细看或看 AI 评语，切到专业版。</div>`;
   box.innerHTML = html;
   bindStyleSwitch(box);
 }
@@ -1214,8 +1245,9 @@ function renderReadingInner(){
 
   const nav = [
     ['rd-lead','命局总览'], ['rd-palaces','十二宫详解'], ['rd-sihua','生年四化'],
-    ['rd-base','命局基础'], ['rd-pattern','格局'], ['rd-limit','运限'],
+    ['rd-layers','四化层次'], ['rd-base','命局基础'], ['rd-limit','运限'],
   ];
+  if(pats.length) nav.push(['rd-pattern','格局']);
 
   let html = styleSwitchHtml();
   html += `<div class="rd-nav">${nav.map(([id,label])=>`<button data-rd="${id}">${label}</button>`).join('')}</div>`;
@@ -1231,6 +1263,7 @@ function renderReadingInner(){
         ${rd.overview.highlights.map(h=>`<div class="hl"><span class="hl-l">${esc(h.label)}</span><span class="hl-v">${esc(h.value)}</span></div>`).join('')}
       </div>` : ''}
       ${rd.overview.paragraphs.map(t=>`<p>${esc(t)}</p>`).join('')}
+      <p>格局名留到文末。先看宫位和四化，名字对不上结构，以宫位和四化为准。</p>
       ${rd.niRules.length ? `<div class="ni-rules">
         <span class="ni-badge">倪师《天纪》· 批命总则</span>
         <ul>${rd.niRules.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
@@ -1272,6 +1305,8 @@ function renderReadingInner(){
     </section>`;
   }
 
+  html += layerSectionHtml(c);
+
   html += `<section class="rd-sec" id="rd-base">
     <div class="rd-h">命局基础<small>五行局 · 命主 · 身主 · 阴阳行限</small></div>
     <div class="base-grid">
@@ -1282,13 +1317,22 @@ function renderReadingInner(){
     </div>
   </section>`;
 
+  let lim = '';
+  if(rd.daxian) lim += `<div class="shc"><div class="bd"><b>大限 · ${esc(rd.daxian.label)}</b><br>${esc(rd.daxian.text)}</div></div>`;
+  if(rd.liunian) lim += `<div class="shc"><div class="bd"><b>流年 · ${esc(rd.liunian.label)}</b><br>${esc(rd.liunian.text)}</div></div>`;
+  if(lim){
+    html += `<section class="rd-sec" id="rd-limit">
+      <div class="rd-h">运限<small>跟随「排盘」页所选的大限与流年</small></div>
+      <div class="sihua-grid">${lim}</div>
+    </section>`;
+  }
+
   if(rd.patterns.length){
     const LV = { excellent:'上格', good:'佳格', neutral:'平格', caution:'需留意' };
     html += `<section class="rd-sec" id="rd-pattern">
-      <div class="rd-h">格局<small>命中 ${rd.patterns.length} 项</small></div>
+      <div class="rd-h">格局<small>总结标签 · ${rd.patterns.length} 项</small></div>
       <div class="lead">
-        <p class="pat-intro">格局讲的是「一张盘的结构长什么样」——同样的星，摆在一起成不成形，决定的是层次，不是吉凶。
-          成格的人，做事有现成的势可以借；不成格也不必慌，格局定的是骨架，路还是靠自己走。</p>
+        <p class="pat-intro">格局是排完盘之后的总结标签，不是起盘的依据。先看主星、亮度和四化，名字对不上结构就不要硬套。写了破格因素的，只算接近。</p>
         ${rd.patterns.map(pt=>`
         <div class="pat ${pt.level}">
           <span class="nm">${esc(pt.name)}<span class="plv ${pt.level}">${LV[pt.level]||''}</span></span>
@@ -1303,15 +1347,7 @@ function renderReadingInner(){
     </section>`;
   }
 
-  let lim = '';
-  if(rd.daxian) lim += `<div class="shc"><div class="bd"><b>大限 · ${esc(rd.daxian.label)}</b><br>${esc(rd.daxian.text)}</div></div>`;
-  if(rd.liunian) lim += `<div class="shc"><div class="bd"><b>流年 · ${esc(rd.liunian.label)}</b><br>${esc(rd.liunian.text)}</div></div>`;
-  if(lim){
-    html += `<section class="rd-sec" id="rd-limit">
-      <div class="rd-h">运限<small>跟随「排盘」页所选的大限与流年</small></div>
-      <div class="sihua-grid">${lim}</div>
-    </section>`;
-  }
+  html += `<div class="rd-foot-note">命盘是倾向和课题。健康、钱和关系上的决定以现实为准，这里不判断寿数。</div>`;
 
   box.innerHTML = html;
 
