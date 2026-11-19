@@ -15,7 +15,7 @@
       <div class="seal"><span>紫微</span><span>斗数</span></div>
       <div>
         <h1>紫微斗数 · 排盘</h1>
-        <div class="sub">输入阳历生辰，即时起盘 · 本命 / 大限 / 流年 · 逐宫详解</div>
+        <div class="sub">输入生辰（阳历 / 阴历），即时起盘 · 本命 / 大限 / 流年 · 逐宫详解</div>
       </div>
     </div>
     <div class="credit">
@@ -35,19 +35,30 @@
     <div id="form-panel">
       <div class="formcard">
         <h2>出生信息</h2>
-        <p class="hint">请填写<strong>阳历（公历）</strong>生日。若不知确切钟点，可先按时辰估算 —— 时辰不同，整盘皆变。</p>
+        <p class="hint">请选择历法并填写生日。若不知确切钟点，可先按时辰估算 —— 时辰不同，整盘皆变。</p>
 
         <div class="row">
-          <label>阳历生日</label>
+          <label>历法</label>
+          <div class="seg" id="f-cal">
+            <button class="on" data-cal="solar">阳历</button>
+            <button data-cal="lunar">阴历</button>
+          </div>
+        </div>
+        <div class="row">
+          <label id="f-date-label">阳历生日</label>
           <div class="date3">
             <label class="d3"><input type="number" id="f-y" min="1900" max="2030" inputmode="numeric" placeholder="1990"><span>年</span></label>
-            <label class="d3"><input type="number" id="f-m" min="1" max="12" inputmode="numeric" placeholder="1"><span>月</span></label>
+            <label class="d3"><select id="f-m" aria-label="月份"></select><span>月</span></label>
             <label class="d3"><input type="number" id="f-d" min="1" max="31" inputmode="numeric" placeholder="1"><span>日</span></label>
           </div>
         </div>
         <div class="row">
           <label>出生时刻</label>
-          <input type="time" id="f-time" value="12:00" step="60">
+          <div class="time24">
+            <label><select id="f-h" aria-label="小时"></select><span>时</span></label>
+            <label><select id="f-min" aria-label="分钟"></select><span>分</span></label>
+            <span class="hint24">24 小时制</span>
+          </div>
         </div>
         <div class="row">
           <label>性别</label>

@@ -71,8 +71,13 @@ input[type=date],input[type=time]{font-variant-numeric:tabular-nums}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .date3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
 .d3{display:flex;align-items:center;gap:5px}
-.d3 input{text-align:center;font-variant-numeric:tabular-nums;padding:9px 6px}
+.d3 input,.d3 select{text-align:center;font-variant-numeric:tabular-nums;padding:9px 6px}
 .d3 span{font-size:12.5px;color:var(--ink3);white-space:nowrap}
+.time24{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.time24 label{display:flex;align-items:center;gap:5px}
+.time24 select{width:auto;min-width:66px;text-align:center;font-variant-numeric:tabular-nums}
+.time24 span{font-size:12.5px;color:var(--ink3);white-space:nowrap}
+.time24 .hint24{font-size:11.5px;color:var(--ink3);margin-left:2px}
 .actions{display:flex;gap:10px;align-items:center;margin-top:26px}
 .btn{
   border:none;border-radius:9px;font-family:var(--sans);font-size:14px;letter-spacing:1.5px;
@@ -239,6 +244,10 @@ aside{display:flex;flex-direction:column;gap:14px}
 .hl{background:var(--card);padding:9px 12px;display:flex;flex-direction:column;gap:2px}
 .hl-l{font-size:10.5px;color:var(--ink3);letter-spacing:.5px}
 .hl-v{font-size:12.5px;color:var(--ink);font-weight:500}
+.hl-ai{display:block;font-size:11.5px;line-height:1.75;color:#3d4a5c;margin-top:6px;padding-top:6px;
+  border-top:1px dashed #d9e1ec}
+.hl-ai b{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.5px;color:#4a5d75;
+  background:#e3eaf3;border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:1px}
 .pat-intro{font-size:12.5px;line-height:1.9;color:var(--ink2);margin-bottom:12px}
 .pmeta{display:block;color:var(--ink3);font-size:10.5px;margin-top:3px;line-height:1.6}
 .plv{display:inline-block;font-size:9.5px;border-radius:3px;padding:0 5px;margin-left:6px;vertical-align:1px}

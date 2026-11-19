@@ -16,8 +16,10 @@ const POS = {
 const state = {
   chart:null, view:'mingpan', dxIndex:0, lnYear:new Date().getFullYear(),
   selBranch:null, brightnessSchool:'default', cmpOpen:false,
-  ai:{ status:'idle', map:{}, err:'', flagged:0, sig:'' }, aiCfgOpen:false, readMode:'mingpan',
-  readStyle:'plain',
+  ai:{ status:'idle', map:{}, err:'', flagged:0, sig:'' },
+  ovAi:{ status:'idle', map:{}, err:'', flagged:0, sig:'' },
+  aiCfgOpen:false, readMode:'mingpan',
+  readStyle:'plain', cal:'solar',
 };
 
 const $ = s => document.querySelector(s);
@@ -37,17 +39,20 @@ const BR_CLASS = { '庙':'b-strong','旺':'b-strong','得':'','利':'','平':'',
 
 /* ───────── 起盘 ───────── */
 function buildChart(){
-  const timeStr = $('#f-time').value || '12:00';
   const errBox = $('#f-err');
   errBox.textContent = '';
 
   const dtIn = readDate();
   if(dtIn.err){ errBox.textContent = dtIn.err; return; }
   const y = dtIn.y, m = dtIn.m, d = dtIn.d;
-  const [ch,cm] = timeStr.split(':').map(Number);
+  const ch = parseInt($('#f-h').value, 10) || 0;
+  const cm = parseInt($('#f-min').value, 10) || 0;
   const gender = $('#f-gender .on').dataset.g;
 
   let cy=y, cmo=m, cd=d, clockH=ch, clockM=cm, notes=[];
+  if(dtIn.lunar){
+    notes.push(`按阴历 ${dtIn.lunar.year} 年${dtIn.lunar.isLeap?'闰':''}${dtIn.lunar.month} 月 ${dtIn.lunar.day} 日输入，已换算为阳历 ${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+  }
 
   // 真太阳时
   const cityOpt = $('#f-city').selectedOptions[0];
@@ -90,12 +95,15 @@ function buildChart(){
   chart.__notes = notes;
   chart.__origDate = { y, m, d, ch, cm };
   chart.__hourBranch = hour;
+  chart.__inputCal = state.cal;
+  chart.__lunarInput = dtIn.lunar || null;
 
   state.chart = chart;
   state.selBranch = chart.mingGongBranch;
   state.view = 'mingpan';
   // 换盘则丢弃上一张盘的 AI 评语
   state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
+  state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
   document.querySelectorAll('#view-seg button').forEach(b=>b.classList.toggle('on', b.dataset.v==='mingpan'));
   syncViewCfg();
 
@@ -533,7 +541,8 @@ function renderCompare(){
 function applyCol(col){
   if(!col) return;
   setDate(col.y, col.m, col.d);
-  $('#f-time').value = `${p2((2 * col.hour) % 24)}:00`;
+  $('#f-h').value = String((2 * col.hour) % 24);
+  $('#f-min').value = '0';
   // 直接以该时辰起盘，故关闭经度校正
   $('#f-prov').value = '';
   $('#f-city').innerHTML = '<option value="">（先选省份）</option>';
@@ -553,12 +562,55 @@ function daysInMonth(y, m){
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
+function monthValue(){ return $('#f-m').value; }
+function isLeapMonthValue(v){ return String(v).indexOf('闰') === 0; }
+function monthNumOf(v){ const n = parseInt(String(v).replace('闰', ''), 10); return isNaN(n) ? 1 : n; }
+
+function monthMax(y, v){
+  if(state.cal === 'lunar'){
+    let max = 0;
+    try{ max = ZW.lunarMonthDays ? ZW.lunarMonthDays(y, monthNumOf(v), isLeapMonthValue(v)) : 0; }catch(e){ max = 0; }
+    return max || 30;
+  }
+  return daysInMonth(y, monthNumOf(v));
+}
+
+function fillMonthOptions(y, prefer){
+  const sel = $('#f-m');
+  const keep = prefer !== undefined ? String(prefer) : sel.value;
+  let html = '';
+  if(state.cal === 'lunar'){
+    let leap = 0;
+    try{ leap = ZW.lunarLeapMonth ? ZW.lunarLeapMonth(y) : 0; }catch(e){ leap = 0; }
+    for(let m = 1; m <= 12; m++){
+      html += `<option value="${m}">${m} 月</option>`;
+      if(leap === m) html += `<option value="闰${m}">闰 ${m} 月</option>`;
+    }
+  } else {
+    for(let m = 1; m <= 12; m++) html += `<option value="${m}">${m} 月</option>`;
+  }
+  sel.innerHTML = html;
+  if([...sel.options].some(o => o.value === keep)) sel.value = keep;
+}
+
 function readDate(){
   const y = parseInt($('#f-y').value, 10);
-  const m = parseInt($('#f-m').value, 10);
+  const mv = monthValue();
   const d = parseInt($('#f-d').value, 10);
-  if(!y || !m || !d) return { err:'请把年、月、日都填上' };
+  if(!y || !mv || !d) return { err:'请把年、月、日都填上' };
   if(y < 1900 || y > 2030) return { err:'年份请在 1900–2030 之间' };
+
+  if(state.cal === 'lunar'){
+    const m = monthNumOf(mv), leap = isLeapMonthValue(mv);
+    const max = monthMax(y, mv);
+    if(d < 1 || d > max) return { err:`阴历 ${y} 年${leap ? '闰' : ''}${m} 月只有 ${max} 天，请改一下日` };
+    let s = null;
+    try{ s = ZW.lunar2solar ? ZW.lunar2solar(y, m, d, leap) : null; }catch(e){ s = null; }
+    if(!s || !s.year) return { err:'阴历换算失败，请检查闰月与日期' };
+    return { y:s.year, m:s.month, d:s.day, lunar:{ year:y, month:m, day:d, isLeap:leap } };
+  }
+
+  const m = monthNumOf(mv);
   if(m < 1 || m > 12) return { err:'月份请在 1–12 之间' };
   const max = daysInMonth(y, m);
   if(d < 1 || d > max) return { err:`${y} 年 ${m} 月只有 ${max} 天，请改一下日` };
@@ -566,24 +618,68 @@ function readDate(){
 }
 
 function setDate(y, m, d){
+  if(state.cal !== 'solar'){ state.cal = 'solar'; updateCalUi(); }
   $('#f-y').value = y;
-  $('#f-m').value = m;
+  fillMonthOptions(y, m);
   $('#f-d').value = d;
   syncDayMax();
 }
 
 function syncDayMax(){
   const y = parseInt($('#f-y').value, 10) || 2000;
-  const m = parseInt($('#f-m').value, 10) || 1;
-  const max = daysInMonth(y, m);
+  const max = monthMax(y, monthValue());
   const el = $('#f-d');
   el.max = max;
   if(parseInt(el.value, 10) > max) el.value = max;
 }
 
+function updateCalUi(){
+  document.querySelectorAll('#f-cal button').forEach(b => b.classList.toggle('on', b.dataset.cal === state.cal));
+  $('#f-date-label').textContent = state.cal === 'lunar' ? '阴历生日' : '阳历生日';
+}
+
+function setCalMode(mode, opts){
+  if(state.cal === mode){ updateCalUi(); return; }
+  const parsed = (opts && opts.convert === false) ? null : readDate();
+  state.cal = mode;
+  updateCalUi();
+
+  let solar = parsed && !parsed.err ? { y:parsed.y, m:parsed.m, d:parsed.d } : null;
+  let lunar = parsed && !parsed.err ? (parsed.lunar || null) : null;
+  if(solar && !lunar){
+    try{ lunar = ZW.solar2lunar ? ZW.solar2lunar(solar.y, solar.m, solar.d) : null; }catch(e){ lunar = null; }
+  }
+  if(!solar && lunar){
+    try{ solar = ZW.lunar2solar ? ZW.lunar2solar(lunar.year, lunar.month, lunar.day, lunar.isLeap) : null; }catch(e){ solar = null; }
+  }
+
+  if(mode === 'lunar' && lunar){
+    $('#f-y').value = lunar.year;
+    fillMonthOptions(lunar.year, (lunar.isLeap ? '闰' : '') + lunar.month);
+    $('#f-d').value = lunar.day;
+  } else if(mode === 'solar' && solar){
+    $('#f-y').value = solar.year;
+    fillMonthOptions(solar.year, solar.month);
+    $('#f-d').value = solar.day;
+  } else {
+    fillMonthOptions(parseInt($('#f-y').value, 10) || 1990, monthValue());
+  }
+  syncDayMax();
+}
+
 function initForm(){
+  const hSel = $('#f-h'), minSel = $('#f-min');
+  for(let h = 0; h < 24; h++) hSel.appendChild(new Option(String(h).padStart(2, '0'), String(h)));
+  for(let m = 0; m < 60; m++) minSel.appendChild(new Option(String(m).padStart(2, '0'), String(m)));
+  hSel.value = '12'; minSel.value = '0';
+
   // 默认日期 1990-01-01
   setDate(1990, 1, 1);
+
+  $('#f-cal').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    setCalMode(b.dataset.cal);
+  });
 
   $('#f-gender').addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
@@ -610,15 +706,19 @@ function initForm(){
     }
   });
 
-  ['#f-y','#f-m','#f-d'].forEach(sel => {
-    const el = $(sel);
-    if(el) el.addEventListener('input', () => { if(sel !== '#f-d') syncDayMax(); });
+  $('#f-y').addEventListener('input', () => {
+    const y = parseInt($('#f-y').value, 10);
+    if(y >= 1900 && y <= 2030 && state.cal === 'lunar') fillMonthOptions(y, monthValue());
+    syncDayMax();
   });
+  $('#f-m').addEventListener('change', syncDayMax);
+  $('#f-d').addEventListener('input', syncDayMax);
 
   $('#f-go').addEventListener('click', buildChart);
   $('#f-demo').addEventListener('click', ()=>{
     setDate(1990, 1, 1);
-    $('#f-time').value = '00:30';
+    $('#f-h').value = '0';
+    $('#f-min').value = '30';
     $('#f-gender').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.g==='male'));
     $('#f-prov').value = ''; $('#f-city').innerHTML='<option value="">（先选省份）</option>'; $('#f-city').disabled = true;
     buildChart();
@@ -874,7 +974,7 @@ function frameMingBranch(){
 function aiSig(){
   const c = state.chart; if(!c) return '';
   const b = c.birthInfo;
-  return `${b.year}-${b.month}-${b.day}-${c.__hourBranch}-${b.gender}-${state.readMode||'mingpan'}`;
+  return `${b.year}-${b.month}-${b.day}-${c.__hourBranch}-${b.gender}-${state.readMode||'mingpan'}-${state.dxIndex}-${state.lnYear}`;
 }
 function aiCacheGet(sig){
   try{ const r = LS.get(AI_CACHE + sig); return r ? JSON.parse(r) : null; }catch(e){ return null; }
@@ -1007,9 +1107,13 @@ function aiStartTicker(){
   if(aiTicker) return;
   aiTicker = setInterval(() => {
     if(aiCoolLeft() <= 0 || $('#view-reading').hidden){ clearInterval(aiTicker); aiTicker = null; renderReading(); return; }
+    const msg = `免费接口限流，还需等 ${Math.ceil(aiCoolLeft()/1000)} 秒`;
     const btn = $('#ai-go'), st = $('#ai-st');
-    if(st) st.textContent = `免费接口限流，还需等 ${Math.ceil(aiCoolLeft()/1000)} 秒`;
+    if(st) st.textContent = msg;
     if(btn) btn.disabled = true;
+    const ob = $('#ovai-go'), ost = $('#ovai-st');
+    if(ost) ost.textContent = msg;
+    if(ob) ob.disabled = true;
   }, 1000);
 }
 
@@ -1042,6 +1146,107 @@ async function aiGenerate(){
     aiCacheSet(sig, map);
   } catch(e){
     state.ai = { status:'error', map:{}, err:(e && e.message) || '生成失败', flagged:0 };
+    if(!aiIsCustom()) aiStartTicker();
+  }
+  renderReading();
+}
+
+/* ───────── 命局总览 AI（六项） ───────── */
+function ovAiPrompt(chart){
+  const b = chart.birthInfo;
+  const mode = state.readMode || 'mingpan';
+  const rd = ZW.buildReading(chart, {
+    mode, daxianIndex: state.dxIndex, liunianYear: state.lnYear, patterns: [],
+  });
+  const hl = (rd.overview && rd.overview.highlights) || [];
+  const fmt = p => {
+    if(!p) return '—';
+    const stars = p.stars.map(s => s.name + (s.brightnessRaw ? `(${s.brightnessRaw})` : '') + (s.siHua ? `[${s.siHua}]` : '')).join('、');
+    const body = stars || (p.borrowedStars && p.borrowedStars.length ? '空宫，借' + p.borrowedStars.join('、') : '空宫');
+    return `${p.name}（${BR[p.branch]}宫 · ${ST[p.stem]}干）：${body}`;
+  };
+  const mb = chart.mingGongBranch;
+  const san = [mb, (mb - 4 + 12) % 12, (mb - 8 + 12) % 12, (mb - 6 + 12) % 12]
+    .map(x => fmt(chart.palaces.find(p => p.branch === x))).join('\n');
+  const head = `命盘：${b.gender === 'male' ? '男' : '女'}，${b.year}年${b.month}月${b.day}日${BR[chart.__hourBranch]}时，`
+    + `命宫在${BR[mb]}，${chart.wuxingJuName || ''}。\n`;
+
+  return `${head}命宫三方四正：\n${san}\n\n本次要解读的六项：\n`
+    + hl.map(h => `- ${h.label}：${h.value}`).join('\n')
+    + `\n\n请按上面这六项分别写一段解读：
+1. 每项 60–110 字，一段，不分点。
+2. 必须结合命盘里的宫位、主星、亮度、四化或五行局来说，不能只解释术语。
+3. 每段都要有只有这张盘才成立的具体判断，严禁「注意休息」「保持积极心态」这类换谁都成立的空话。
+4. 用日常口语，句子短，不堆四字成语。
+5. 只用上面给出的星曜与宫位，不要引入星座、生肖、八字等体系。
+6. 不下吉凶定论，禁止体检、就医、手术、投资、理财、买房等建议性字眼。
+
+只输出一个 JSON 对象，键必须与上面六项的名称一字不差。`;
+}
+
+function ovAiBarHtml(){
+  const st = state.ovAi;
+  const cool = aiCoolLeft();
+  const loading = st.status === 'loading';
+  const label = loading ? '生成中…'
+    : (st.status === 'done' || st.status === 'cached')
+      ? (cool > 0 ? `重新生成（${Math.ceil(cool / 1000)}s）` : '重新生成')
+      : cool > 0 ? `冷却 ${Math.ceil(cool / 1000)}s`
+      : 'AI 逐项解读';
+
+  let status;
+  if(loading) status = '正在请求模型，约 10–40 秒…';
+  else if(st.status === 'error') status = st.err;
+  else if(st.status === 'done') status = `已生成 ${Object.keys(st.map).length} 项` + (st.flagged ? ` · ${st.flagged} 项含越界建议，已删句` : '');
+  else if(st.status === 'cached') status = `本机缓存已载入 ${Object.keys(st.map).length} 项`;
+  else status = '按命宫、身宫等六项分开解读 · 与十二宫 AI 共用接口设置';
+
+  return `<div class="ai-bar">
+    <button class="ai-btn" id="ovai-go" ${(loading || cool > 0) ? 'disabled' : ''}>${esc(label)}</button>
+    <span class="ai-st ${st.status === 'error' ? 'err' : ''}" id="ovai-st">${esc(status)}</span>
+  </div>
+  <p class="ai-disc">AI 解读由第三方免费模型即时生成，未经人工校对，也可能与上方本地解读不一致。点击生成会把命盘信息（不含姓名）发送到该接口。仅供参考。</p>`;
+}
+
+async function ovAiGenerate(){
+  if(!state.chart) return;
+
+  if(!aiIsCustom() && aiCoolLeft() > 0){
+    state.ovAi = { status:'error', map:state.ovAi.map, err:`免费接口限流，还需等 ${Math.ceil(aiCoolLeft() / 1000)} 秒`, flagged:0 };
+    renderReading(); aiStartTicker(); return;
+  }
+
+  const sig = 'ov|' + aiSig();
+  state.ovAi = { status:'loading', map:{}, err:'', flagged:0, sig };
+  renderReading();
+
+  try{
+    const content = await aiCall(ovAiPrompt(state.chart));
+    if(!aiIsCustom()) LS.set(AI_LAST, String(Date.now()));
+    const raw = aiParse(content);
+
+    const labels = state.ovLabels || [];
+    const norm = s => String(s).replace(/[\s·/、]/g, '');
+    const map = {}; let flagged = 0;
+    for(const label of labels){
+      let text = raw[label];
+      if(!text){
+        for(const k of Object.keys(raw)){
+          const a = norm(k), b = norm(label);
+          if(a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0){ text = raw[k]; break; }
+        }
+      }
+      if(!text) continue;
+      const f = aiFilter(text);
+      if(f.flagged) flagged++;
+      if(f.text) map[label] = f.text;
+    }
+    if(!Object.keys(map).length) throw new Error('模型未按六项返回内容');
+
+    state.ovAi = { status:'done', map, err:'', flagged };
+    aiCacheSet(sig, map);
+  } catch(e){
+    state.ovAi = { status:'error', map:{}, err:(e && e.message) || '生成失败', flagged:0 };
     if(!aiIsCustom()) aiStartTicker();
   }
   renderReading();
@@ -1209,7 +1414,7 @@ function renderReadingInner(){
 
   if(!c){
     box.innerHTML = `<div class="rd-empty">
-      <p>还没有命盘 —— 先到「排盘」填一份阳历生辰。</p>
+      <p>还没有命盘 —— 先到「排盘」填一份生辰（阳历 / 阴历均可）。</p>
       <button class="btn btn-primary" id="rd-goto">去排盘</button>
     </div>`;
     const g = $('#rd-goto');
@@ -1223,6 +1428,14 @@ function renderReadingInner(){
     const cached = aiCacheGet(state.ai.sig);
     if(cached && Object.keys(cached).length){
       state.ai = { status:'cached', map:cached, err:'', flagged:0, sig:state.ai.sig };
+    }
+  }
+  const ovSig = 'ov|' + aiSig();
+  if(state.ovAi.status === 'idle' && state.ovAi.sig !== ovSig){
+    state.ovAi.sig = ovSig;
+    const cachedOv = aiCacheGet(ovSig);
+    if(cachedOv && Object.keys(cachedOv).length){
+      state.ovAi = { status:'cached', map:cachedOv, err:'', flagged:0, sig:ovSig };
     }
   }
 
@@ -1242,6 +1455,7 @@ function renderReadingInner(){
     liunianYear: state.lnYear,
     patterns: pats,
   });
+  state.ovLabels = (rd.overview.highlights || []).map(h => h.label);
 
   const nav = [
     ['rd-lead','命局总览'], ['rd-palaces','十二宫详解'], ['rd-sihua','生年四化'],
@@ -1259,8 +1473,12 @@ function renderReadingInner(){
     <div class="lead">
       <div class="lt">${esc(rd.overview.title)}</div>
       <div class="tags">${rd.overview.tags.map(t=>`<span>${esc(t)}</span>`).join('')}</div>
-      ${rd.overview.highlights && rd.overview.highlights.length ? `<div class="hl-grid">
-        ${rd.overview.highlights.map(h=>`<div class="hl"><span class="hl-l">${esc(h.label)}</span><span class="hl-v">${esc(h.value)}</span></div>`).join('')}
+      ${rd.overview.highlights && rd.overview.highlights.length ? `${ovAiBarHtml()}
+      <div class="hl-grid">
+        ${rd.overview.highlights.map(h=>{
+          const t = (state.ovAi.map || {})[h.label];
+          return `<div class="hl"><span class="hl-l">${esc(h.label)}</span><span class="hl-v">${esc(h.value)}</span>${t?`<span class="hl-ai"><b>AI</b>${esc(t)}</span>`:''}</div>`;
+        }).join('')}
       </div>` : ''}
       ${rd.overview.paragraphs.map(t=>`<p>${esc(t)}</p>`).join('')}
       <p>格局名留到文末。先看宫位和四化，名字对不上结构，以宫位和四化为准。</p>
@@ -1363,6 +1581,8 @@ function renderReadingInner(){
   // AI 评语交互
   const go = $('#ai-go');
   if(go) go.addEventListener('click', aiGenerate);
+  const ovGo = $('#ovai-go');
+  if(ovGo) ovGo.addEventListener('click', ovAiGenerate);
 
   const rdSeg = $('#rd-seg');
   if(rdSeg) rdSeg.addEventListener('click', e => {
@@ -1370,21 +1590,23 @@ function renderReadingInner(){
     if(state.readMode === b.dataset.m) return;
     state.readMode = b.dataset.m;
     state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
+    state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
     renderReading();
   });
 
   const dxp = $('#rd-dxprev');
   if(dxp) dxp.addEventListener('click', () => {
-    if(state.dxIndex > 0){ state.dxIndex--; state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; renderReading(); }
+    if(state.dxIndex > 0){ state.dxIndex--; state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; renderReading(); }
   });
   const dxn = $('#rd-dxnext');
   if(dxn) dxn.addEventListener('click', () => {
-    if(state.dxIndex < state.chart.daXians.length-1){ state.dxIndex++; state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; renderReading(); }
+    if(state.dxIndex < state.chart.daXians.length-1){ state.dxIndex++; state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' }; renderReading(); }
   });
   const lnSel = $('#rd-lnyear');
   if(lnSel) lnSel.addEventListener('change', e => {
     state.lnYear = parseInt(e.target.value, 10);
     state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
+    state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
     renderReading();
   });
 
@@ -1406,6 +1628,7 @@ function renderReadingInner(){
     }catch(e){}
     state.aiCfgOpen = false;
     state.ai = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
+    state.ovAi = { status:'idle', map:{}, err:'', flagged:0, sig:'' };
     renderReading();
   });
 }
